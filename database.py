@@ -22,25 +22,52 @@ def check_password(password, saved):
 def init_db():
     with conn() as c:
         c.executescript("""
-        CREATE TABLE IF NOT EXISTS goals(
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    target REAL NOT NULL,
-    saved REAL DEFAULT 0,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-);
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        );
 
-CREATE TABLE IF NOT EXISTS savings_history(
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    goal_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    saved_date TEXT NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES users(id),
-    FOREIGN KEY(goal_id) REFERENCES goals(id)
-);        """)
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tx_date TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            category TEXT NOT NULL,
+            description TEXT,
+            amount REAL NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
 
+        CREATE TABLE IF NOT EXISTS budgets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            monthly_limit REAL NOT NULL,
+            UNIQUE(user_id, category),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            target REAL NOT NULL,
+            saved REAL DEFAULT 0,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS savings_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            goal_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            saved_date TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(goal_id) REFERENCES goals(id)
+        );
+        """)
 def register_user(name,email,password):
     if not name.strip() or "@" not in email: raise ValueError("Enter a valid name and email.")
     with conn() as c: c.execute("INSERT INTO users(name,email,password) VALUES(?,?,?)",(name.strip(),email.strip().lower(),password_hash(password)))
@@ -55,8 +82,15 @@ def add_transaction(uid,tx_date,kind,category,description,amount):
     with conn() as c: c.execute("INSERT INTO transactions(user_id,tx_date,kind,category,description,amount) VALUES(?,?,?,?,?,?)",(uid,tx_date,kind,category.strip(),description.strip(),amount))
 
 def list_transactions(uid):
-    with conn() as c: return c.execute("SELECT id,user_id,tx_date,kind,category,description,amount FROM transactions WHERE user_id=? ORDER BY tx_date DESC,id DESC",(uid,)).fetchall()
-
+    with conn() as c:
+        return c.execute(
+            """SELECT id, user_id, tx_date, kind, category,
+                      description, amount
+               FROM transactions
+               WHERE user_id=?
+               ORDER BY tx_date DESC, id DESC""",
+            (uid,)
+        ).fetchall()
 def delete_transaction(txid,uid):
     with conn() as c: c.execute("DELETE FROM transactions WHERE id=? AND user_id=?",(txid,uid))
 
